@@ -40,3 +40,6 @@ backend/
 # Virtual Environment
 venv/
 ENV/
+
+# Data files
+*.csv
