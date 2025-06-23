@@ -40,3 +40,8 @@ backend/
 # Virtual Environment
 venv/
 ENV/
+
+# DB Configuration files (to protect sensitive information)
+scoring/db_connector.py
+scoring/db_session.py
+test_connection.py
