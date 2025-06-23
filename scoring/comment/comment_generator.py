@@ -1,14 +1,15 @@
 # ----------------------------------------------------------------------------------------------------
-# 작성목적 : 평가 코멘트 생성
-# 작성일 : 2024-03-21
+# 작성목적 : 면접 답변 평가 코멘트 생성
+# 작성일 : 2025-06-23
 
 # 변경사항 내역 (날짜 | 변경목적 | 변경내용 | 작성자 순으로 기입)
-# 2024-03-21 | 최초 구현 | 평가 코멘트 생성 기능 구현 | 이소미
+# 2025-06-23 | 최초 구현 | 면접 답변 평가 코멘트 생성 기능 구현 | 이소미
 # ----------------------------------------------------------------------------------------------------
 
 import os
+from sqlalchemy.orm import Session
 from sqlalchemy import text
-from scoring.db_connector import DBConnector
+from scoring.core.db_connector import DBConnector
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -55,7 +56,7 @@ def summarize_comments(db, eval_cat_cd: str, keyword_texts: list[str]) -> str:
 
     return response.choices[0].message.content.strip()
 
-def generate_all_comments(db):
+def generate_all_comments(db: Session):
     print("\n[📝] 평가 코멘트 생성을 시작합니다...")
     
     # 1. INTV_RESULT_ID + EVAL_CAT_CD 별로 키워드 수집

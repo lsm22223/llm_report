@@ -1,9 +1,9 @@
 # ----------------------------------------------------------------------------------------------------
-# 작성목적 : 면접 피드백에서 키워드 추출
-# 작성일 : 2024-03-21
+# 작성목적 : 면접 답변 키워드 추출
+# 작성일 : 2025-06-23
 
 # 변경사항 내역 (날짜 | 변경목적 | 변경내용 | 작성자 순으로 기입)
-# 2024-03-21 | 최초 구현 | 키워드 추출 기능 구현 | 이소미
+# 2025-06-23 | 최초 구현 | 면접 답변 키워드 추출 기능 구현 | 이소미
 # ----------------------------------------------------------------------------------------------------
 
 from sqlalchemy.orm import Session
@@ -12,7 +12,7 @@ from collections import defaultdict
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
-from scoring.db_connector import DBConnector
+from scoring.core.db_connector import DBConnector
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))

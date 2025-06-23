@@ -1,34 +1,47 @@
 # scoring/llm.py
 
 import os
-import sys
+from typing import Dict, Any, Tuple
 import openai
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from scoring.core.db_connector import DBConnector
 
-# backend/src를 Python path에 추가
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
-
-# 필요한 함수만 직접 import
-from src.domain.evaluations.crud import get_evaluation_category_by_code
+# ----------------------------------------------------------------------------------------------------
+# 작성목적 : LLM을 이용한 답변 분석
+# 작성일 : 2025-06-23
+# 
+# 변경사항 내역 (날짜 | 변경목적 | 변경내용 | 작성자 순으로 기입)
+# 2025-06-23 | 최초 구현 | LLM 답변 분석 기능 구현 | 이소미
+# ----------------------------------------------------------------------------------------------------
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def get_category_description(db: Session, eval_cat_cd: str) -> tuple[str, str]:
-    """평가 항목 정보를 DB에서 가져옵니다.
+def get_evaluation_category_by_code(db: Session, category_code: str) -> Dict[str, Any]:
+    """DB에서 직접 평가 카테고리 정보를 조회합니다."""
+    result = db.execute(
+        text("SELECT category_code, category_name, description FROM evaluation_category WHERE category_code = :code"),
+        {"code": category_code}
+    ).first()
     
-    Returns:
-        tuple[str, str]: (카테고리명, 상세설명) 튜플
-    """
+    if not result:
+        raise ValueError(f"Category code {category_code} not found")
+        
+    return {
+        "category_code": result[0],
+        "category_name": result[1],
+        "description": result[2]
+    }
+
+def get_category_description(db: Session, eval_cat_cd: str) -> Tuple[str, str]:
+    """평가 항목 정보를 DB에서 가져옵니다."""
     category = get_evaluation_category_by_code(db, eval_cat_cd)
-    if category:
-        return (
-            category.evaluation_category_name,
-            category.evaluation_category_description or "상세 설명 없음"
-        )
-    return ("일반 역량", "")
+    return (
+        category["category_name"],
+        category["description"] or "상세 설명 없음"
+    )
 
 def summarize_comments(db: Session, eval_cat_cd: str, keyword_texts: list[str]) -> str:
     cat_name, cat_desc = get_category_description(db, eval_cat_cd)

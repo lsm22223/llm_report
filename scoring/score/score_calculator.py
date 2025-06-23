@@ -1,7 +1,16 @@
+# ----------------------------------------------------------------------------------------------------
+# 작성목적 : 면접 답변 점수 계산
+# 작성일 : 2025-06-23
+# 
+# 변경사항 내역 (날짜 | 변경목적 | 변경내용 | 작성자 순으로 기입)
+# 2025-06-23 | 최초 구현 | 면접 답변 점수 계산 기능 구현 | 이소미
+# ----------------------------------------------------------------------------------------------------
+
 # scoring/score_calculator.py
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from scoring.core.db_connector import DBConnector
 import pandas as pd
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
@@ -55,42 +64,42 @@ def process_scores(db: Session):
     
     # 1단계: 평가 항목별 평균 점수 계산 (APL_ID 기준)
     print("\n[1단계] 지원자별 평가 항목 평균 점수")
-    print("- 지원자(APL_ID)별로 각 평가 항목의 평균 점수 계산")
+    print("- 지원자(APL_ID)별로 각 평가 항목의 평균 점수 계산\n")
     
-    category_scores = pd.read_sql("""
-        WITH CategoryScores AS (
+    # 지원자별 평가 항목 평균 점수 계산
+    applicant_scores = pd.read_sql("""
+        WITH ApplicantCategoryScores AS (
             SELECT 
                 r.APL_ID,
                 ac.EVAL_CAT_CD,
                 AVG(ac.ANS_CAT_SCORE) as AVG_SCORE
             FROM interview_result r
-            LEFT JOIN answer_category_result ac ON r.INTV_RESULT_ID = ac.ANS_SCORE_ID
-            WHERE ac.ANS_CAT_SCORE IS NOT NULL
+            JOIN interview_process ip ON r.INTV_PROC_ID = ip.INTV_PROC_ID
+            JOIN interview_question_assignment iqa ON ip.INTV_PROC_ID = iqa.INTV_PROC_ID
+            JOIN interview_answer ia ON iqa.INTV_Q_ASSIGN_ID = ia.INTV_Q_ASSIGN_ID
+            JOIN answer_score ans ON ia.INTV_ANS_ID = ans.INTV_ANS_ID
+            JOIN answer_category_result ac ON ans.ANS_SCORE_ID = ac.ANS_SCORE_ID
             GROUP BY r.APL_ID, ac.EVAL_CAT_CD
         )
         SELECT 
             APL_ID,
-            MAX(CASE WHEN EVAL_CAT_CD = 'ATTITUDE' THEN AVG_SCORE END) as '면접태도',
             MAX(CASE WHEN EVAL_CAT_CD = 'COMM_SKILL' THEN AVG_SCORE END) as '의사소통력',
-            MAX(CASE WHEN EVAL_CAT_CD = 'ACADEMIC' THEN AVG_SCORE END) as '학우학업도',
-            MAX(CASE WHEN EVAL_CAT_CD = 'ORG_FIT' THEN AVG_SCORE END) as '조직적합도',
             MAX(CASE WHEN EVAL_CAT_CD = 'PROB_SOLVE' THEN AVG_SCORE END) as '문제해결력',
-            MAX(CASE WHEN EVAL_CAT_CD = 'COMPETENCY' THEN AVG_SCORE END) as '보유역량',
-            MAX(CASE WHEN EVAL_CAT_CD = 'ENGLISH' THEN AVG_SCORE END) as '영어능력'
-        FROM CategoryScores
+            MAX(CASE WHEN EVAL_CAT_CD = 'TECH_SKILL' THEN AVG_SCORE END) as '보유역량',
+            MAX(CASE WHEN EVAL_CAT_CD = 'ENGLISH' THEN AVG_SCORE END) as '영어능력',
+            MAX(CASE WHEN EVAL_CAT_CD = 'SPECIAL' THEN AVG_SCORE END) as '조직적합도'
+        FROM ApplicantCategoryScores
         GROUP BY APL_ID
         ORDER BY APL_ID
     """, db.bind)
-    
-    if not category_scores.empty:
-        print("\n📊 지원자별 평가 항목 평균 점수:")
-        print(category_scores.to_string())
-        print(f"\n총 {len(category_scores)}명의 평가 결과")
-        
-        # 평가 항목별 전체 평균 계산
-        print("\n📊 평가 항목별 전체 평균:")
-        category_means = category_scores.mean(numeric_only=True)
-        print(category_means.to_string())
+
+    print("\n📊 지원자별 평가 항목 평균 점수:")
+    print(applicant_scores.to_string())
+    print(f"\n총 {len(applicant_scores)}명의 평가 결과\n")
+
+    # 평가 항목별 전체 평균
+    print("📊 평가 항목별 전체 평균:")
+    print(applicant_scores.mean().to_string())
     
     # 2단계: 가중치 정보 조회 (모든 평가 항목)
     print("\n[2단계] 평가 항목별 가중치")
@@ -121,8 +130,8 @@ def process_scores(db: Session):
     
     # 면접자별로 그룹화하여 가중 평균 계산
     final_scores = []
-    for intv_id in category_scores['APL_ID'].unique():
-        intv_scores = category_scores[category_scores['APL_ID'] == intv_id]
+    for intv_id in applicant_scores['APL_ID'].unique():
+        intv_scores = applicant_scores[applicant_scores['APL_ID'] == intv_id]
         weighted_sum = 0
         total_weight = 0
         
@@ -200,31 +209,95 @@ def process_scores(db: Session):
     
     # 3. 데이터 매칭 현황
     print("\n3. 데이터 매칭 현황:")
-    matching_data = pd.read_sql("""
-        SELECT 
-            r.INTV_RESULT_ID,
-            r.APL_ID,
-            r.INTV_PROC_ID,
-            COUNT(DISTINCT ac.EVAL_CAT_CD) as CATEGORY_COUNT,
-            GROUP_CONCAT(DISTINCT ac.EVAL_CAT_CD) as CATEGORIES
-        FROM interview_result r
-        LEFT JOIN answer_category_result ac ON r.INTV_RESULT_ID = ac.ANS_SCORE_ID
-        GROUP BY r.INTV_RESULT_ID, r.APL_ID, r.INTV_PROC_ID
-        ORDER BY r.INTV_RESULT_ID
+    matching_status = pd.read_sql("""
+        WITH ApplicantCategories AS (
+            SELECT 
+                r.INTV_RESULT_ID,
+                r.APL_ID,
+                r.INTV_PROC_ID,
+                GROUP_CONCAT(DISTINCT ac.EVAL_CAT_CD) as CATEGORIES,
+                COUNT(DISTINCT ac.EVAL_CAT_CD) as CATEGORY_COUNT
+            FROM interview_result r
+            JOIN interview_process ip ON r.INTV_PROC_ID = ip.INTV_PROC_ID
+            JOIN interview_question_assignment iqa ON ip.INTV_PROC_ID = iqa.INTV_PROC_ID
+            JOIN interview_answer ia ON iqa.INTV_Q_ASSIGN_ID = ia.INTV_Q_ASSIGN_ID
+            JOIN answer_score ans ON ia.INTV_ANS_ID = ans.INTV_ANS_ID
+            JOIN answer_category_result ac ON ans.ANS_SCORE_ID = ac.ANS_SCORE_ID
+            GROUP BY r.INTV_RESULT_ID, r.APL_ID, r.INTV_PROC_ID
+        )
+        SELECT * FROM ApplicantCategories
+        ORDER BY APL_ID
     """, db.bind)
+
     print("\n📊 데이터 매칭 현황:")
-    print(matching_data.to_string())
-    
-    # 4. 평가 카테고리 분포
-    print("\n4. 평가 카테고리 분포:")
+    print(matching_status.to_string())
+
+    # 평가 카테고리 분포
     category_dist = pd.read_sql("""
         SELECT 
-            EVAL_CAT_CD,
+            ac.EVAL_CAT_CD,
             COUNT(*) as COUNT,
-            COUNT(DISTINCT ANS_SCORE_ID) as UNIQUE_ANSWERS
-        FROM answer_category_result
-        GROUP BY EVAL_CAT_CD
-        ORDER BY EVAL_CAT_CD
+            COUNT(DISTINCT ans.INTV_ANS_ID) as UNIQUE_ANSWERS
+        FROM answer_category_result ac
+        JOIN answer_score ans ON ac.ANS_SCORE_ID = ans.ANS_SCORE_ID
+        GROUP BY ac.EVAL_CAT_CD
     """, db.bind)
+
+    print("\n4. 평가 카테고리 분포:")
     print("\n📊 카테고리별 평가 수:")
     print(category_dist.to_string())
+
+    print("\n[📊] 통계 정보")
+    
+    print("\n=== 등급 분포 ===")
+    grade_dist = pd.read_sql("""
+        SELECT 
+            OVERALL_GRADE as GRADE,
+            COUNT(*) as COUNT
+        FROM interview_result
+        GROUP BY OVERALL_GRADE
+        ORDER BY OVERALL_GRADE
+    """, db.bind)
+    print(grade_dist.to_string())
+    
+    print("\n=== 평가 항목별 통계 ===")
+    
+    # 평가 항목별 통계 계산
+    category_stats = pd.read_sql("""
+        SELECT 
+            ac.EVAL_CAT_CD,
+            ROUND(AVG(ac.ANS_CAT_SCORE), 1) as AVG_SCORE,
+            MIN(ac.ANS_CAT_SCORE) as MIN_SCORE,
+            MAX(ac.ANS_CAT_SCORE) as MAX_SCORE,
+            COUNT(DISTINCT r.APL_ID) as APPLICANT_COUNT
+        FROM interview_result r
+        JOIN interview_process ip ON r.INTV_PROC_ID = ip.INTV_PROC_ID
+        JOIN interview_question_assignment iqa ON ip.INTV_PROC_ID = iqa.INTV_PROC_ID
+        JOIN interview_answer ia ON iqa.INTV_Q_ASSIGN_ID = ia.INTV_Q_ASSIGN_ID
+        JOIN answer_score ans ON ia.INTV_ANS_ID = ans.INTV_ANS_ID
+        JOIN answer_category_result ac ON ans.ANS_SCORE_ID = ac.ANS_SCORE_ID
+        GROUP BY ac.EVAL_CAT_CD
+        ORDER BY ac.EVAL_CAT_CD
+    """, db.bind)
+
+    for _, row in category_stats.iterrows():
+        print(f"\n{row['EVAL_CAT_CD']}:")
+        print(f"- 평균: {row['AVG_SCORE']}")
+        print(f"- 최저: {row['MIN_SCORE']}")
+        print(f"- 최고: {row['MAX_SCORE']}")
+        print(f"- 평가된 지원자 수: {row['APPLICANT_COUNT']}명")
+    
+    # 데이터 불일치 확인
+    data_check = pd.read_sql("""
+        SELECT 
+            (SELECT COUNT(DISTINCT APL_ID) FROM interview_result) as TOTAL_APPLICANTS,
+            (SELECT MAX(APL_ID) FROM interview_result) as MAX_APL_ID,
+            (SELECT COUNT(*) FROM interview_result WHERE OVERALL_SCORE IS NOT NULL) as SCORED_RESULTS
+    """, db.bind)
+    
+    print("\n[❗] 데이터 현황:")
+    print(f"- 전체 지원자 수: {data_check.iloc[0]['TOTAL_APPLICANTS']}명")
+    print(f"- 최대 지원자 ID: {data_check.iloc[0]['MAX_APL_ID']}")
+    print(f"- 점수 평가 완료: {data_check.iloc[0]['SCORED_RESULTS']}명")
+
+    print("\n[👋] 프로그램을 종료합니다.")
