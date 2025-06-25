@@ -39,10 +39,12 @@ def summarize_comments(db, eval_cat_cd: str, keyword_texts: list[str]) -> str:
         f"평가 항목: {cat_name}\n"
         f"평가 설명: {cat_desc}\n\n"
         "이를 바탕으로 SK AX 채용팀 시각의 종합 코멘트를 작성해 주세요.\n"
-        "해당 평가 항목의 특성을 잘 반영하여 한 문장으로 작성해 주세요.\n\n"
+        "해당 평가 항목의 특성을 잘 반영하여 제목과 세부설명을 세 문장으로 작성해 주세요.\n"
+        "제목은 '[평가 항목의 핵심 특성]' 형식으로 작성해 주세요.\n\n"
         "키워드 목록:\n" +
         "\n".join(f"- {txt}" for txt in keyword_texts if txt.strip()) +
         "\n\n[답변 예시]\n"
+        "[탄탄한 기본기와 심화 지식 필요성]\n\n"
         f"이 지원자는 {cat_name} 측면에서 ~한 강점을 보였으나, ~한 부분은 보완이 필요합니다."
     )
 

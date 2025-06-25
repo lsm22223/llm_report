@@ -21,6 +21,7 @@
 # 2025-06-25 | 기능 추가 | ENGLISH_FLUENCY와 ENGLISH_GRAMMAR를 ENGLISH_ABILITY로 통합하는 예외처리 추가 | 이소미
 # 2025-06-25 | 버그 수정 | 영어 관련 카테고리 처리 로직 수정 | 이소미
 # 2025-06-25 | 기능 개선 | CAT_GRADE 컬럼 제거 및 전체 등급만 계산하도록 수정 | 이소미
+# 2025-06-25 | 기능 추가 | LLM을 이용한 피드백 생성 기능 추가 | 이소미
 # ----------------------------------------------------------------------------------------------------
 
 from sqlalchemy.orm import Session
@@ -29,6 +30,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from scoring.core.db_connector import DBConnector
+from scoring.comment.comment_generator import summarize_comments
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -217,14 +219,15 @@ def process_scores(db: Session):
                     strengths = [s for s in cat_scores['STRENGTH_KEYWORD'].dropna() if pd.notna(s)]
                     weaknesses = [w for w in cat_scores['WEAKNESS_KEYWORD'].dropna() if pd.notna(w)]
                     
-                    # 피드백 생성
-                    feedback = ""
+                    # 키워드 텍스트 생성
+                    keyword_texts = []
                     if strengths:
-                        feedback += "강점: " + " | ".join(strengths)
+                        keyword_texts.append("강점: " + " | ".join(strengths))
                     if weaknesses:
-                        if feedback:
-                            feedback += "\n"
-                        feedback += "약점: " + " | ".join(weaknesses)
+                        keyword_texts.append("약점: " + " | ".join(weaknesses))
+                    
+                    # LLM을 통한 피드백 생성
+                    feedback = summarize_comments(db, cat_cd, keyword_texts)
                     
                     # 결과 저장
                     insert_query = text("""
@@ -263,14 +266,15 @@ def process_scores(db: Session):
             if english_scores:
                 avg_english_score = sum(english_scores) / len(english_scores)
                 
-                # 피드백 생성
-                feedback = ""
+                # 키워드 텍스트 생성
+                keyword_texts = []
                 if english_strengths:
-                    feedback += "강점: " + " | ".join(english_strengths)
+                    keyword_texts.append("강점: " + " | ".join(english_strengths))
                 if english_weaknesses:
-                    if feedback:
-                        feedback += "\n"
-                    feedback += "약점: " + " | ".join(english_weaknesses)
+                    keyword_texts.append("약점: " + " | ".join(english_weaknesses))
+                
+                # LLM을 통한 피드백 생성
+                feedback = summarize_comments(db, 'ENGLISH_ABILITY', keyword_texts)
                 
                 # ENGLISH_ABILITY로 통합하여 저장
                 insert_query = text("""
@@ -310,6 +314,49 @@ def process_scores(db: Session):
         
         # 변경사항 커밋
         db.commit()
+
+        # 전체 점수 기준으로 순위 매기기
+        print("\n[3-3] 전체 순위 계산 및 업데이트")
+        results = pd.read_sql("""
+            WITH weighted_scores AS (
+                SELECT 
+                    r.INTV_RESULT_ID,
+                    SUM(c.CAT_SCORE * e.WEIGHT) / SUM(e.WEIGHT) as weighted_avg
+                FROM interview_result r
+                JOIN interview_category_result c ON r.INTV_RESULT_ID = c.INTV_RESULT_ID
+                JOIN evaluation_category e ON c.EVAL_CAT_CD = e.EVAL_CAT_CD
+                GROUP BY r.INTV_RESULT_ID
+            )
+            SELECT 
+                INTV_RESULT_ID,
+                weighted_avg as OVERALL_SCORE,
+                RANK() OVER (ORDER BY weighted_avg DESC) as OVERALL_RANK
+            FROM weighted_scores
+            ORDER BY OVERALL_RANK
+        """, db.bind)
+
+        # 각 결과의 등급과 순위를 업데이트
+        for _, row in results.iterrows():
+            update_query = text("""
+                UPDATE interview_result 
+                SET 
+                    OVERALL_SCORE = :score,
+                    OVERALL_GRADE = :grade,
+                    OVERALL_RANK = :rank,
+                    UPD_DTM = :upd_dtm
+                WHERE INTV_RESULT_ID = :result_id
+            """)
+            
+            db.execute(update_query, {
+                'score': float(row['OVERALL_SCORE']),
+                'grade': calculate_grade(float(row['OVERALL_SCORE'])),
+                'rank': int(row['OVERALL_RANK']),
+                'upd_dtm': datetime.now(),
+                'result_id': int(row['INTV_RESULT_ID'])
+            })
+        
+        db.commit()
+        print("✓ 전체 순위 및 등급 업데이트 완료")
         print("\n[✅] 모든 데이터 처리 및 저장이 완료되었습니다!")
         
         # 4. 저장된 데이터 확인
@@ -355,7 +402,10 @@ def calculate_grade(score: float) -> str:
 
 if __name__ == "__main__":
     # DB 연결
-    db = DBConnector()
+    db = DBConnector().SessionLocal()
     
-    # 점수 계산 및 저장 실행
-    process_scores(db)
+    try:
+        # 점수 계산 및 저장 실행
+        process_scores(db)
+    finally:
+        db.close()

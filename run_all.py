@@ -4,6 +4,7 @@
 # 
 # 변경사항 내역 (날짜 | 변경목적 | 변경내용 순으로 기입)
 # 2025-06-23 | 최초 구현 | 분석 프로세스 구현
+# 2025-06-24 | 순서 수정 | 점수 계산 후 코멘트 생성 및 키워드 추출하도록 수정
 # ----------------------------------------------------------------------------------------------------
 
 from scoring.core.db_connector import DBConnector
@@ -21,6 +22,16 @@ def check_data_exists(db):
     """)).fetchall()
     
     return len(results) if results else 0
+
+def check_scores_exist(db):
+    """점수 계산이 완료되었는지 확인합니다."""
+    results = db.execute(text("""
+        SELECT COUNT(*) 
+        FROM interview_result 
+        WHERE OVERALL_SCORE IS NOT NULL
+    """)).scalar()
+    
+    return results > 0
 
 def main():
     try:
@@ -41,6 +52,14 @@ def main():
         print("\n1️⃣ 점수 계산")
         db = DBConnector().SessionLocal()
         process_scores(db)
+        db.close()
+        
+        # 점수 계산 완료 확인
+        db = DBConnector().SessionLocal()
+        if not check_scores_exist(db):
+            print("\n❌ 점수 계산이 완료되지 않았습니다. 프로세스를 종료합니다.")
+            db.close()
+            return
         db.close()
         
         # 2. 코멘트 생성
