@@ -7,36 +7,44 @@ FastAPI 백엔드에서 수집된 면접 데이터를 분석하여 다음 항목
 - 항목별 평가 코멘트 요약 (LLM)
 - 면접자별 강점/약점 키워드 추출 (LLM)
 
----
+```mermaid
+graph TD
+    A[면접 데이터 입력] --> B[점수 계산]
+    B --> C[코멘트 생성]
+    C --> D[키워드 추출]
+    D --> E[결과 저장]
+    E --> F[리포트 생성]
+```
 
 ## 📁 폴더 구조 및 기능 설명
 
 ```
 final_report/
-├── scoring/
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── db_connector.py    # DB 연결 및 세션 관리
+├── backend/              # FastAPI 백엔드 서버 (별도 관리)
+├── data/                # 데이터 파일 저장
+│   ├── answer_category_result_*.csv
+│   └── answer_score_*.csv
+├── scoring/             # 핵심 분석 모듈
+│   ├── core/           # 핵심 유틸리티
+│   │   ├── db_connector.py    # DB 연결 관리
 │   │   └── db_session.py      # DB 세션 설정
-│   ├── score/
-│   │   ├── __init__.py
-│   │   ├── score_calculator.py # 점수 계산 및 등급 산정
+│   ├── score/          # 점수 계산
+│   │   ├── score_calculator.py # 점수/등급 계산
 │   │   └── run_scoring.py     # 점수 계산 실행
-│   ├── comment/
-│   │   ├── __init__.py
+│   ├── comment/        # 코멘트 생성
 │   │   ├── comment_generator.py # 평가 코멘트 생성
-│   │   └── llm.py             # LLM 관련 유틸리티
-│   ├── keyword/
-│   │   ├── __init__.py
-│   │   ├── keyword_extractor.py # 키워드 추출
-│   │   ├── run_keyword_extractor.py # 키워드 추출 실행
-│   │   └── show_keywords.py   # 추출된 키워드 조회
-│   └── utils/
-│       ├── __init__.py
-│       ├── check_tables.py    # DB 테이블 구조 확인
-│       └── test_db.py         # DB 연결 테스트
-├── run_all.py                 # 전체 프로세스 실행
-└── show_results.py            # 분석 결과 조회
+│   │   └── llm.py             # LLM 유틸리티
+│   ├── keyword/        # 키워드 추출
+│   │   ├── keyword_extractor.py # 키워드 추출 로직
+│   │   └── run_keyword_extractor.py # 키워드 추출 실행
+│   └── utils/          # 유틸리티 도구
+│       ├── check_tables.py    # DB 구조 검증
+│       ├── backup_and_migrate.py # DB 백업/마이그레이션
+│       └── update_table_structure.py # 테이블 구조 업데이트
+├── run_all.py          # 전체 프로세스 실행
+├── show_results.py     # 분석 결과 조회
+├── test_data.py        # 테스트 데이터 생성
+└── requirements.txt    # 패키지 의존성
 ```
 
 ### 📊 주요 모듈 설명
@@ -44,7 +52,7 @@ final_report/
 #### 1. 점수 계산 (`score/score_calculator.py`)
 - 평가 항목별 평균 점수 계산
 - 가중치 적용하여 최종 점수 계산
-- 상대 등급 산정 (A+, A, B+, B, C+, C 등)
+- 상대 등급 산정 (A+, A, B+, B, C+, C)
 - 순위 계산 및 DB 저장
 
 #### 2. 코멘트 생성 (`comment/comment_generator.py`)
@@ -114,11 +122,12 @@ python show_results.py
    - WEIGHT: 가중치
 
 ### 🔍 주요 평가 항목
+- ENGLISH_ABILITY: 영어 능력 (통합)
 - COMM_SKILL: 의사소통력
-- ENGLISH: 영어 능력
 - PROB_SOLVE: 문제해결력
-- SPECIAL: 조직 적합도
-- TECH_SKILL: 보유 역량
+- TECH_SKILL: 기술역량
+- JOB_COMPATIBILITY: 직무적합도
+- ORG_FIT: 조직적합도
 
 ### 💡 주요 로직 및 주의사항
 
@@ -128,25 +137,15 @@ python show_results.py
 - 각 함수는 독립적으로 실행 가능
 
 #### 2. 데이터 흐름
+```mermaid
+graph TD
+    A[답변 데이터 입력] --> B[점수 계산]
+    B --> C[등급 산정]
+    C --> D[코멘트 생성]
+    D --> E[키워드 추출]
+    E --> F[결과 저장]
+    F --> G[리포트 생성]
 ```
-1. 점수 계산 (score_calculator.py)
-interview_result + answer_category_result
-↓
-최종 점수 및 등급
-↓
-interview_result 업데이트
-
-2. 결과 조회 (show_results.py)
-- 전체 면접 결과 요약
-- 평가 항목별 점수
-- 통계 정보 (등급 분포, 항목별 평균/최저/최고)
-```
-
-#### 3. 실행 순서 (`run_all.py`)
-1. 분석이 필요한 데이터 확인
-2. 점수 계산 (`process_scores`)
-3. 코멘트 생성 (`generate_all_comments`)
-4. 키워드 추출 (`extract_and_store_keywords`)
 
 ### 📝 변경 내역
 
@@ -156,42 +155,12 @@ interview_result 업데이트
    - 관련 DB 스키마 및 코드 수정
 
 2. 면접 결과 ID 부여 방식 개선
-   - INTV_RESULT_ID가 APL_ID를 따라가지 않고 순차적으로 부여되도록 수정 (1,2,3...)
+   - INTV_RESULT_ID가 APL_ID를 따라가지 않고 순차적으로 부여 (1,2,3...)
    - 점수 순으로 정렬되어 ID 부여
 
 3. 평가 등급 체계 단순화
    - interview_category_result 테이블에서 CAT_GRADE 컬럼 제거
    - 가중치를 반영한 전체 등급만 표시하도록 변경
-   - 관련 코드 정리 및 최적화
-
-4. 코멘트 생성 및 키워드 추출 개선
-   - 코멘트 제목 형식 통일 ("[평가 항목의 핵심 특성]" 형식)
-   - 각 지원자별로 강점/약점 키워드 6개씩 추출하도록 수정
-   - 키워드 추출 시 전체 피드백을 종합적으로 분석하도록 개선
-
-5. 실행 순서 개선
-   - 점수 계산 완료 후 코멘트 생성 및 키워드 추출이 실행되도록 수정
-   - 점수 계산 실패 시 후속 프로세스가 실행되지 않도록 안전장치 추가
-
-### 🧪 테스트 및 유틸리티 스크립트
-
-#### 1. 테스트 데이터 관리
-- `test_data.py`: 기본 테스트 데이터 생성
-- `test_english.py`: 영어 평가 관련 테스트 데이터 생성
-- `update_categories.py`: 평가 카테고리 업데이트 및 초기화
-
-#### 2. 유틸리티 스크립트 (`scoring/utils/`)
-- `add_upd_dtm.py`: 데이터 수정일시 자동 업데이트
-- `backup_and_migrate.py`: DB 백업 및 마이그레이션
-- `check_eval_categories.py`: 평가 카테고리 유효성 검사
-- `check_null_columns.py`: NULL 값 검사
-- `check_tables.py`: 테이블 구조 검사
-- `dump_table_schema.py`: 테이블 스키마 덤프
-- `migrate_ans_score.py`: 답변 점수 마이그레이션
-- `migrate_category_result.py`: 카테고리 결과 마이그레이션
-- `show_columns.py`: 컬럼 정보 조회
-- `show_table_schema.py`: 테이블 스키마 조회
-- `update_table_structure.py`: 테이블 구조 업데이트
 
 ### 🔒 제외 대상 (.gitignore)
 - Python 관련: `__pycache__/`, `*.pyc`, `*.pyo`, `*.pyd`, `build/`, `dist/`, `*.egg-info/`

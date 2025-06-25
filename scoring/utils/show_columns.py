@@ -1,44 +1,52 @@
 # ----------------------------------------------------------------------------------------------------
-# 작성목적 : answer_category_result와 answer_score 테이블의 컬럼명 조회
-# 작성일 : 2024-03-21
+# 작성목적 : 테이블 컬럼 정보 조회
+# 작성일 : 2025-06-24
 
 # 변경사항 내역 (날짜 | 변경목적 | 변경내용 | 작성자 순으로 기입)
-# 2024-03-21 | 최초 구현 | 컬럼명 조회 스크립트 작성 | 이소미
+# 2025-06-24 | 최초 구현 | 테이블 컬럼 정보 조회 기능 구현 | 이소미
 # ----------------------------------------------------------------------------------------------------
-
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from scoring.core.db_connector import DBConnector
 from sqlalchemy import text
 
-def show_columns():
-    db = DBConnector()
+def main():
+    print("\n[🔍] 테이블 컬럼 정보를 조회합니다...")
     
-    # MySQL의 경우
-    columns_query = """
-    SELECT TABLE_NAME, COLUMN_NAME 
-    FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_NAME IN ('answer_category_result', 'answer_score')
-    ORDER BY TABLE_NAME, ORDINAL_POSITION;
-    """
+    # DB 연결
+    db = DBConnector().SessionLocal()
     
     try:
-        with db.engine.connect() as conn:
-            result = conn.execute(text(columns_query))
+        tables = [
+            'interview_result',
+            'interview_category_result',
+            'answer_score',
+            'answer_category_result',
+            'evaluation_category'
+        ]
+        
+        for table in tables:
+            print(f"\n=== {table} 테이블 ===")
+            results = db.execute(text(f"""
+                SELECT 
+                    COLUMN_NAME,
+                    COLUMN_TYPE,
+                    IS_NULLABLE,
+                    COLUMN_KEY,
+                    EXTRA
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = :table
+                ORDER BY ORDINAL_POSITION
+            """), {"table": table}).fetchall()
             
-            current_table = None
-            for row in result:
-                if current_table != row[0]:
-                    current_table = row[0]
-                    print(f"\n[{current_table}] 컬럼 목록:")
-                    print("-" * 50)
-                
-                print(f"- {row[1]}")
+            print(f"{'컬럼명':<20} {'타입':<15} {'NULL':<6} {'키':<5} {'기타'}")
+            print("-" * 60)
+            for row in results:
+                print(f"{row[0]:<20} {row[1]:<15} {row[2]:<6} {row[3]:<5} {row[4]}")
             
     except Exception as e:
-        print(f"오류 발생: {str(e)}")
+        print(f"\n[❌] 오류가 발생했습니다: {str(e)}")
+    finally:
+        db.close()
 
 if __name__ == "__main__":
-    show_columns() 
+    main() 
