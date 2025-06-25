@@ -83,11 +83,33 @@ cp .env.example .env
 # - OPENAI_API_KEY: GPT-4 API 키
 ```
 
-3. 실행 옵션
+3. DB 스키마 생성 (두 가지 방법 중 선택)
 
+a. SQL 파일 사용:
+```bash
+# MySQL에서 스키마 생성
+mysql -u root -p < table_schema_dump.sql
+```
+
+b. Python 스크립트 사용:
+```bash
+# SQLAlchemy를 사용한 테이블 생성
+python scoring/utils/create_tables.py
+```
+
+4. 초기 데이터 설정
+```bash
+# 평가 카테고리 초기화
+python update_categories.py
+
+# 테스트 데이터 생성 (선택사항)
+python test_data.py
+```
+
+5. 실행 순서
 a. 전체 프로세스 실행:
 ```bash
-python run_all.py
+python run_all.py  # 점수 계산 → 코멘트 생성 → 키워드 추출 순으로 실행
 ```
 
 b. 개별 기능 실행:
@@ -98,6 +120,38 @@ python -m scoring.score.run_scoring
 # 결과 조회
 python show_results.py
 ```
+
+### 📋 실행 프로세스 상세
+
+1. `table_schema_dump.sql`: DB 테이블 구조 생성
+   - 평가 카테고리 (evaluation_category)
+   - 답변 점수 (answer_score)
+   - 답변 카테고리 결과 (answer_category_result)
+   - 면접 결과 (interview_result)
+   - 면접 카테고리 결과 (interview_category_result)
+
+2. `update_categories.py`: 평가 카테고리 초기화
+   - ENGLISH_ABILITY (가중치: 0.2)
+   - COMM_SKILL (가중치: 0.1)
+   - PROB_SOLVE (가중치: 0.2)
+   - TECH_SKILL (가중치: 0.2)
+   - JOB_COMPATIBILITY (가중치: 0.15)
+   - ORG_FIT (가중치: 0.15)
+
+3. `test_data.py`: 테스트 데이터 생성
+   - 3명의 지원자 데이터 생성
+   - 각 평가 항목별 점수 및 키워드 생성
+   - answer_score, answer_category_result 테이블 데이터 생성
+
+4. `run_all.py`: 전체 분석 프로세스
+   - 점수 계산: answer_category_result → interview_result
+   - 코멘트 생성: answer_category_result → interview_category_result
+   - 키워드 추출: interview_category_result → interview_result
+
+5. `show_results.py`: 분석 결과 조회
+   - 전체 면접 결과 요약
+   - 평가 항목별 점수
+   - 통계 정보 (등급 분포, 평균/최저/최고)
 
 ### 📚 데이터베이스 구조
 
