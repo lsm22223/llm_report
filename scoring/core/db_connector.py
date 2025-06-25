@@ -85,11 +85,17 @@ class DBConnector:
 
     def update_answer_scores(self, intv_ans_id: int, scores: dict):
         """답변별 점수를 업데이트합니다."""
+        # 지원자 ID와 문항 번호를 ANS_SCORE_ID로 직접 사용
+        # 예: 1번 지원자의 2번 문항 -> 102
+        apl_id = intv_ans_id // 100  # 앞자리(지원자 ID)
+        q_num = intv_ans_id % 100    # 뒷자리(문항 번호)
+        ans_score_id = apl_id * 100 + q_num
+        
         query = text("""
             INSERT INTO answer_category_result 
-                (INTV_ANS_ID, EVAL_CAT_CD, ANS_CAT_SCORE, RGS_DTM, UPD_DTM)
+                (ANS_SCORE_ID, INTV_ANS_ID, EVAL_CAT_CD, ANS_CAT_SCORE, RGS_DTM, UPD_DTM)
             VALUES 
-                (:ans_id, :cat_cd, :score, NOW(), NOW())
+                (:score_id, :ans_id, :cat_cd, :score, NOW(), NOW())
             ON DUPLICATE KEY UPDATE
                 ANS_CAT_SCORE = :score,
                 UPD_DTM = NOW()
@@ -98,6 +104,7 @@ class DBConnector:
         with self.engine.connect() as conn:
             for cat_cd, score in scores.items():
                 conn.execute(query, {
+                    'score_id': ans_score_id,
                     'ans_id': intv_ans_id,
                     'cat_cd': cat_cd,
                     'score': score

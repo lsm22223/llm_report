@@ -147,3 +147,72 @@ interview_result 업데이트
 2. 점수 계산 (`process_scores`)
 3. 코멘트 생성 (`generate_all_comments`)
 4. 키워드 추출 (`extract_and_store_keywords`)
+
+### 📝 변경 내역
+
+#### 2025-06-24
+1. 영어 평가 항목 통합
+   - ENGLISH_FLUENCY와 ENGLISH_GRAMMAR를 ENGLISH_ABILITY로 통합
+   - 관련 DB 스키마 및 코드 수정
+
+2. 면접 결과 ID 부여 방식 개선
+   - INTV_RESULT_ID가 APL_ID를 따라가지 않고 순차적으로 부여되도록 수정 (1,2,3...)
+   - 점수 순으로 정렬되어 ID 부여
+
+3. 평가 등급 체계 단순화
+   - interview_category_result 테이블에서 CAT_GRADE 컬럼 제거
+   - 가중치를 반영한 전체 등급만 표시하도록 변경
+   - 관련 코드 정리 및 최적화
+
+### 🧪 테스트 및 유틸리티 스크립트
+
+#### 1. 테스트 데이터 관리
+- `test_data.py`: 기본 테스트 데이터 생성
+- `test_english.py`: 영어 평가 관련 테스트 데이터 생성
+- `update_categories.py`: 평가 카테고리 업데이트 및 초기화
+
+#### 2. 유틸리티 스크립트 (`scoring/utils/`)
+- `add_upd_dtm.py`: 데이터 수정일시 자동 업데이트
+- `backup_and_migrate.py`: DB 백업 및 마이그레이션
+- `check_eval_categories.py`: 평가 카테고리 유효성 검사
+- `check_null_columns.py`: NULL 값 검사
+- `check_tables.py`: 테이블 구조 검사
+- `dump_table_schema.py`: 테이블 스키마 덤프
+- `migrate_ans_score.py`: 답변 점수 마이그레이션
+- `migrate_category_result.py`: 카테고리 결과 마이그레이션
+- `show_columns.py`: 컬럼 정보 조회
+- `show_table_schema.py`: 테이블 스키마 조회
+- `update_table_structure.py`: 테이블 구조 업데이트
+
+### 🔒 제외 대상 (.gitignore)
+- Python 관련: `__pycache__/`, `*.pyc`, `*.pyo`, `*.pyd`, `build/`, `dist/`, `*.egg-info/`
+- 환경 설정: `.env` (`.env.example` 제외)
+- IDE 설정: `.idea/`, `.vscode/`
+- 로그 파일: `*.log`
+- 가상환경: `venv/`, `ENV/`
+- 데이터 파일: `*.csv`
+- 백엔드 폴더: `backend/`
+
+### 📋 코드 작성 규칙
+1. 모든 파일 최상단에 작성 목적과 변경 이력을 주석으로 기록
+```python
+# ----------------------------------------------------------------------------------------------------
+# 작성목적 : [파일의 주요 기능 설명]
+# 작성일 : YYYY-MM-DD
+# 
+# 변경사항 내역 (날짜 | 변경목적 | 변경내용 | 작성자 순으로 기입)
+# YYYY-MM-DD | 최초 구현 | 상세 구현 내용 | 작성자
+# ----------------------------------------------------------------------------------------------------
+```
+
+2. 주요 함수와 클래스에 상세한 docstring 작성
+3. 변수명과 함수명은 명확하고 이해하기 쉽게 작성
+4. 에러 처리는 try-except 구문으로 명확하게 처리
+5. DB 연결은 `DBConnector` 클래스를 통해 일관되게 관리
+
+### 🔄 데이터베이스 작업 시 주의사항
+1. 모든 테이블에 `RGS_DTM`(등록일시)와 `UPD_DTM`(수정일시) 필수
+2. FK 관계가 있는 테이블 삭제 시 자식 테이블부터 삭제
+3. 데이터 변경 전 반드시 백업
+4. 트랜잭션 처리 필수 (commit/rollback)
+5. 대용량 데이터 처리 시 배치 처리 권장
